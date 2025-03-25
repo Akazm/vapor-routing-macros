@@ -113,7 +113,7 @@ struct ControllerDiscoveryCLI: ParsableCommand {
     }
 }
 
-extension URL: ExpressibleByArgument {
+extension URL: @retroactive ExpressibleByArgument {
     public init?(argument: String) {
         self.init(fileURLWithPath: argument, isDirectory: true)
     }

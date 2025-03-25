@@ -1,8 +1,9 @@
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-public struct ControllerMacro: MemberMacro {
-    public static var formatMode: FormatMode = .disabled
+public struct ControllerMacro: MemberMacro, ExtensionMacro {
+
+    public static let formatMode: FormatMode = .auto
     
     public static func expansion<D, C>(
         of node: AttributeSyntax,
@@ -13,12 +14,12 @@ public struct ControllerMacro: MemberMacro {
         
         guard
             let classDeclaration = decl.as(ClassDeclSyntax.self),
-            classDeclaration.modifiers?.first(where: { $0.name.text == "final" }) != nil
+            classDeclaration.modifiers.first(where: { $0.name.text == "final" }) != nil
         else {
             throw CustomError.message("@Controller only works with classes including the 'final' modifier")
         }
         
-        guard let arguments = node.argument?.as(TupleExprElementListSyntax.self),
+        guard let arguments = node.arguments?.as(LabeledExprListSyntax.self),
               let pathArgValue = arguments.first?.expression.description,
               pathArgValue != "\"\""
         else {
@@ -26,13 +27,23 @@ public struct ControllerMacro: MemberMacro {
         }
         
         var middlewareArg: String? = nil
-        if let arguments = node.argument?.as(TupleExprElementListSyntax.self),
+        if let arguments = node.arguments?.as(LabeledExprListSyntax.self),
            let middlewareArgValue = arguments.first(where: { $0.label?.description == "middleware" })?.expression.description {
             middlewareArg = middlewareArgValue
         }
         
         let handlers = try classDeclaration.memberBlock.members
             .compactMap { $0.decl.as(FunctionDeclSyntax.self) }
+            .filter { funcDecl in
+                for attr in funcDecl.attributes {
+                    guard case let .attribute(attribute) = attr,
+                          let attributeType = attribute.attributeName.as(IdentifierTypeSyntax.self) else {
+                        return false
+                    }
+                    return HandlerMacro.knownMacroNames.contains(attributeType.name.text)
+                }
+                return false
+            }
             .enumerated()
             .map { index, fun in try expansion(of: fun, with: pathArgValue, in: context, at: index) }
             .compactMap { $0 }
@@ -55,15 +66,32 @@ public struct ControllerMacro: MemberMacro {
         
         return [functionDecl.formatted().as(DeclSyntax.self)].compactMap { $0 }
     }
-    
+    public static func expansion(
+        of node: SwiftSyntax.AttributeSyntax,
+        attachedTo declaration: some SwiftSyntax.DeclGroupSyntax,
+        providingExtensionsOf type: some SwiftSyntax.TypeSyntaxProtocol,
+        conformingTo protocols: [SwiftSyntax.TypeSyntax],
+        in context: some SwiftSyntaxMacros.MacroExpansionContext
+    ) throws -> [SwiftSyntax.ExtensionDeclSyntax] {
+        try [
+            ExtensionDeclSyntax(
+                """
+                
+                extension \(raw: type.trimmed): RouteCollection {
+                }
+                """
+            )
+        ]
+    }
+
     private static func expansion(
         of declaration: FunctionDeclSyntax,
         with controllerPath: String?,
         in context: some MacroExpansionContext,
         at index: Int
     ) throws -> (path: String?, fun: FunctionCallExprSyntax)? {
+        let attributes = declaration.attributes
         guard
-            let attributes = declaration.attributes,
             let (method, path, streamingStrategy) = try getMethodAndPath(attributes)
         else {
             return nil
@@ -71,13 +99,15 @@ public struct ControllerMacro: MemberMacro {
         
         let closureSignature = ClosureSignatureSyntax(
             leadingTrivia: .space,
-            input: .simpleInput(
-                ClosureParamListSyntax {
-                    ClosureParamSyntax(name: .identifier("req"))
+            parameterClause: .simpleInput(
+                ClosureShorthandParameterListSyntax {
+                    ClosureShorthandParameterSyntax(name: .identifier("req"))
                 }
             )
             ,
-            effectSpecifiers: TypeEffectSpecifiersSyntax(asyncSpecifier: .keyword(.async), throwsSpecifier: .keyword(.throws))
+            effectSpecifiers: TypeEffectSpecifiersSyntax(
+                asyncSpecifier: .keyword(.async), throwsClause: .init(throwsSpecifier: .keyword(.throws))
+            )
         )
         
         let handlerParams = getHandlerParameters(decl: declaration)
@@ -96,18 +126,21 @@ public struct ControllerMacro: MemberMacro {
             .map { $0.type == "Request" ? "\($0.argName): req" : "\($0.argName): \($0.name)Param" }
             .joined(separator: ",")
         
-        let expr = "self.\(raw: declaration.identifier.text)(\(raw: argumentList))" as ExprSyntax
+        let expr = "self.\(raw: declaration.name.text)(\(raw: argumentList))" as ExprSyntax
         var finalExpr = expr
-        if declaration.signature.effectSpecifiers?.asyncSpecifier != nil, declaration.signature.effectSpecifiers?.throwsSpecifier != nil {
-            if let tryAwaitExpr = TryExprSyntax(expression: AwaitExprSyntax(expression: expr)).as(ExprSyntax.self) {
+        if declaration.signature.effectSpecifiers?.asyncSpecifier != nil,
+           declaration.signature.effectSpecifiers?.throwsClause?.throwsSpecifier != nil {
+            if let tryAwaitExpr = ExprSyntax(TryExprSyntax(expression: AwaitExprSyntax(expression: expr))) {
                 finalExpr = tryAwaitExpr
             }
-        } else if declaration.signature.effectSpecifiers?.asyncSpecifier != nil, declaration.signature.effectSpecifiers?.throwsSpecifier == nil {
-            if let awaitExpr = AwaitExprSyntax(expression: expr).as(ExprSyntax.self) {
+        } else if declaration.signature.effectSpecifiers?.asyncSpecifier != nil,
+                  declaration.signature.effectSpecifiers?.throwsClause?.throwsSpecifier == nil {
+            if let awaitExpr = ExprSyntax(AwaitExprSyntax(expression: expr)) {
                 finalExpr = awaitExpr
             }
-        } else if declaration.signature.effectSpecifiers?.asyncSpecifier == nil, declaration.signature.effectSpecifiers?.throwsSpecifier != nil {
-            if let tryExpr = TryExprSyntax(expression: expr).as(ExprSyntax.self) {
+        } else if declaration.signature.effectSpecifiers?.asyncSpecifier == nil,
+                  declaration.signature.effectSpecifiers?.throwsClause?.throwsSpecifier != nil {
+            if let tryExpr = ExprSyntax(TryExprSyntax(expression: expr)) {
                 finalExpr = tryExpr
             }
         }
@@ -115,15 +148,15 @@ public struct ControllerMacro: MemberMacro {
         let functionCall = FunctionCallExprSyntax(
             calledExpression: ExprSyntax("controller.on"),
             leftParen: .leftParenToken(),
-            argumentList: TupleExprElementListSyntax {
-                TupleExprElementSyntax(expression: "\(raw: method)" as ExprSyntax)
+            arguments: LabeledExprListSyntax {
+                LabeledExprSyntax(expression: "\(raw: method)" as ExprSyntax)
                 if path != nil {
-                    TupleExprElementSyntax(expression: "handler\(raw: index)Path.pathComponents" as ExprSyntax)
+                    LabeledExprSyntax(expression: "handler\(raw: index)Path.pathComponents" as ExprSyntax)
                 }
                 if let strategy = streamingStrategy {
-                    TupleExprElementSyntax(label: "body", expression: "\(raw: strategy)" as ExprSyntax)
+                    LabeledExprSyntax(label: "body", expression: "\(raw: strategy)" as ExprSyntax)
                 }
-                TupleExprElementSyntax(label: "use", expression: ClosureExprSyntax(signature: closureSignature) {
+                LabeledExprSyntax(label: "use", expression: ClosureExprSyntax(signature: closureSignature) {
                     for stmt in guardStatments {
                         stmt
                     }
@@ -137,6 +170,7 @@ public struct ControllerMacro: MemberMacro {
         )
         
         return (path, functionCall)
+        
     }
     
     private static func expandHandlerParam(param: HandlerParam) -> GuardStmtSyntax? {
@@ -159,7 +193,7 @@ public struct ControllerMacro: MemberMacro {
             ConditionElementSyntax(
                 condition: .optionalBinding(
                     OptionalBindingConditionSyntax(
-                        bindingKeyword: .keyword(.let),
+                        bindingSpecifier: .keyword(.let),
                         pattern: PatternSyntax(stringLiteral: param.name + "Param"),
                         initializer: InitializerClauseSyntax(value: expression)
                     )
@@ -171,12 +205,3 @@ public struct ControllerMacro: MemberMacro {
     }
 }
 
-extension ControllerMacro: ConformanceMacro {
-    public static func expansion<Declaration, Context>(
-        of node: AttributeSyntax,
-        providingConformancesOf declaration: Declaration,
-        in context: Context
-    ) throws -> [(TypeSyntax, GenericWhereClauseSyntax?)] where Declaration : DeclGroupSyntax, Context : MacroExpansionContext {
-        return [ ("RouteCollection", nil) ]
-    }
-}

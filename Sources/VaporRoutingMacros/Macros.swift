@@ -40,8 +40,8 @@ public struct BodyContent<Value: Content> {
     }
 }
 
-@attached(conformance)
 @attached(member, names: named(boot), named(init))
+@attached(extension, conformances: RouteCollection)
 public macro Controller(_ path: String, middleware: Middleware? = nil) = #externalMacro(
     module: "VaporRoutingMacrosMacros",
     type: "ControllerMacro"
@@ -82,5 +82,3 @@ public macro Handler(_ method: HTTPMethod, path: String = "") = #externalMacro(
     module: "VaporRoutingMacrosMacros",
     type: "HandlerMacro"
 )
-
-

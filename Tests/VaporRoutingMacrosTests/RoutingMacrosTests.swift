@@ -21,12 +21,12 @@ final class VaporRoutingMacrosTests: XCTestCase {
                 }
             }
             """,
-            expandedSource: """
-            
+            expandedSource: #"""
             final class HelloController {
                 func hello(req: Request, @QueryParam("name") provided: String?) -> String {
                     return "Hi, there!"
                 }
+
                 public func boot(routes: RoutesBuilder) {
                     let controllerPath = "hello"
                     let controller = routes.grouped(controllerPath.pathComponents)
@@ -36,9 +36,10 @@ final class VaporRoutingMacrosTests: XCTestCase {
                         })
                 }
             }
+
             extension HelloController: RouteCollection {
             }
-            """,
+            """#,
             macros: testMacros
         )
     }
@@ -55,11 +56,11 @@ final class VaporRoutingMacrosTests: XCTestCase {
             }
             """,
             expandedSource: """
-            
             final class HelloController {
                 func hello(req: Request, @PathParam name: String) -> String {
                     return "Hi, there!"
                 }
+
                 public func boot(routes: RoutesBuilder) {
                     let controllerPath = "hello"
                     let controller = routes.grouped(controllerPath.pathComponents)
@@ -72,6 +73,7 @@ final class VaporRoutingMacrosTests: XCTestCase {
                         })
                 }
             }
+
             extension HelloController: RouteCollection {
             }
             """,
@@ -96,15 +98,15 @@ final class VaporRoutingMacrosTests: XCTestCase {
             }
             """,
             expandedSource: """
-            
             final class HelloController {
-            
+                
                 struct Hello {
                     let name: String
                 }
                 func hello(req: Request, @QueryContent hello: Hello) -> String {
                     return "Hi, there!"
                 }
+
                 public func boot(routes: RoutesBuilder) {
                     let controllerPath = "hello"
                     let controller = routes.grouped(controllerPath.pathComponents)
@@ -116,6 +118,7 @@ final class VaporRoutingMacrosTests: XCTestCase {
                         })
                 }
             }
+
             extension HelloController: RouteCollection {
             }
             """,
@@ -140,15 +143,15 @@ final class VaporRoutingMacrosTests: XCTestCase {
             }
             """,
             expandedSource: """
-            
             final class HelloController {
-            
+                
                 struct Hello {
                     let name: String
                 }
                 func hello(req: Request, @BodyContent hello: Hello) -> String {
                     return "Hi, there!"
                 }
+
                 public func boot(routes: RoutesBuilder) {
                     let controllerPath = "hello"
                     let controller = routes.grouped(controllerPath.pathComponents)
@@ -160,6 +163,7 @@ final class VaporRoutingMacrosTests: XCTestCase {
                         })
                 }
             }
+
             extension HelloController: RouteCollection {
             }
             """,
@@ -179,11 +183,11 @@ final class VaporRoutingMacrosTests: XCTestCase {
             }
             """,
             expandedSource: """
-            
             final class HelloController {
                 func hello(req: Request) -> String {
                     return "Hi, there!"
                 }
+
                 public func boot(routes: RoutesBuilder) {
                     let controllerPath = "hello"
                     let controller = routes.grouped(controllerPath.pathComponents)
@@ -193,6 +197,7 @@ final class VaporRoutingMacrosTests: XCTestCase {
                         })
                 }
             }
+
             extension HelloController: RouteCollection {
             }
             """,
@@ -212,11 +217,11 @@ final class VaporRoutingMacrosTests: XCTestCase {
             }
             """,
             expandedSource: """
-            
             final class HelloController {
                 func hello() -> String {
                     return "Hi, there!"
                 }
+
                 public func boot(routes: RoutesBuilder) {
                     let controllerPath = "hello"
                     let routesWithMiddleware = routes.grouped(AddVersionHeaderMiddleware())
@@ -226,6 +231,7 @@ final class VaporRoutingMacrosTests: XCTestCase {
                         })
                 }
             }
+
             extension HelloController: RouteCollection {
             }
             """,

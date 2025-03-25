@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import CompilerPluginSupport
 import PackageDescription
 
@@ -28,9 +28,9 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/apple/swift-syntax",
-            branch: "main"
+            from: "600.0.1"
         ),
-        .package(url: "https://github.com/vapor/vapor.git", from: "4.76.0"),
+        .package(url: "https://github.com/vapor/vapor.git", from: "4.89.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.2"),
     ],
     targets: [

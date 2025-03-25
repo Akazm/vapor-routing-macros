@@ -4,35 +4,37 @@ import PackagePlugin
 enum ControllerDiscoveryPluginError: Error {
     case missingControllersDirectory
 }
-
+ 
 @main
 struct ControllerDiscoveryPlugin: BuildToolPlugin {
     
+    @available(_PackageDescription 6.0)
     func createBuildCommands(
         context: PluginContext,
         target: Target
     ) async throws -> [Command] {
-        let controllersDirectory = target.directory.appending(["Controllers"])
-        let tempDirectory = context.pluginWorkDirectory.appending(["tmp"])
-        let outputDirectory = context.pluginWorkDirectory.appending(["generated"])
+        let targetDirectoryURL = URL(filePath: target.directory.string)
+        let controllersDirectory = targetDirectoryURL.appending(component: "Controllers")
+        let tempDirectory = context.pluginWorkDirectoryURL.appending(component: "tmp")
+        let outputDirectory = context.pluginWorkDirectoryURL.appending(component: "generated")
         
         do {
-            let inputPaths = try copyFiles(from: controllersDirectory, to: tempDirectory)
-            let outputPaths = [
-                outputDirectory.appending(["ControllerDiscovery.generated.swift"])
+            let inputPaths: [URL] = try copyFiles(from: controllersDirectory, to: tempDirectory)
+            let outputPaths: [URL] = [
+                outputDirectory.appending(component: "ControllerDiscovery.generated.swift")
             ]
-            
             return [
-                .buildCommand(
+                Command.buildCommand(
                     displayName: "ControllerDiscoveryCLI",
-                    executable: try context.tool(named: "ControllerDiscoveryCLI").path,
+                    executable: try context.tool(named: "ControllerDiscoveryCLI").url,
                     arguments: [
                         target.name,
-                        tempDirectory,
-                        outputDirectory,
+                        tempDirectory.path(),
+                        outputDirectory.path(),
                     ],
                     inputFiles: inputPaths,
-                    outputFiles: outputPaths)
+                    outputFiles: outputPaths
+                )
             ]
         } catch ControllerDiscoveryPluginError.missingControllersDirectory {
             return []
@@ -40,30 +42,29 @@ struct ControllerDiscoveryPlugin: BuildToolPlugin {
     }
     
     func copyFiles(
-        from controllersDirectory: Path,
-        to tempDirectory: Path
-    ) throws -> [Path] {
+        from controllersDirectory: URL,
+        to tempDirectory: URL
+    ) throws -> [URL] {
         /// Delete `tempDirectory` if it exists (from a previous run)
-        if FileManager.default.fileExists(atPath: tempDirectory.string, isDirectory: nil) {
-            try FileManager.default.removeItem(atPath: tempDirectory.string)
+        if FileManager.default.fileExists(atPath: tempDirectory.path(), isDirectory: nil) {
+            try FileManager.default.removeItem(atPath: tempDirectory.path())
         }
         
-        
-        guard let enumerator = FileManager.default.enumerator(atPath: controllersDirectory.string) else {
+        guard let enumerator = FileManager.default.enumerator(atPath: controllersDirectory.path()) else {
             return []
         }
         
         try FileManager.default.copyItem(
-            atPath: controllersDirectory.string,
-            toPath: tempDirectory.string)
+            atPath: controllersDirectory.path(),
+            toPath: tempDirectory.path())
         
-        var inputPaths: [Path] = []
+        var inputPaths: [URL] = []
         while let file = enumerator.nextObject() as? String {
             let swiftSuffix = ".swift"
             guard file.hasSuffix(swiftSuffix) else {
                 continue
             }
-            let inputPath = controllersDirectory.appending([file])
+            let inputPath = controllersDirectory.appending(component: file)
             inputPaths.append(inputPath)
         }
         return inputPaths
