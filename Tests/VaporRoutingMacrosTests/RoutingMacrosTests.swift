@@ -49,7 +49,7 @@ final class VaporRoutingMacrosTests: XCTestCase {
             """
             @Controller("hello")
             final class HelloController {
-                @Get(path: "there")
+                @Get(path: "there/:name")
                 func hello(req: Request, @PathParam name: String) -> String {
                     return "Hi, there!"
                 }
@@ -64,7 +64,7 @@ final class VaporRoutingMacrosTests: XCTestCase {
                 public func boot(routes: RoutesBuilder) {
                     let controllerPath = "hello"
                     let controller = routes.grouped(controllerPath.pathComponents)
-                    let handler0Path = "there"
+                    let handler0Path = "there/:name"
                     controller.on(.GET, handler0Path.pathComponents, use: { req async throws in
                             guard let nameParam = req.parameters.get("name", as: String.self) else {
                                 throw Abort(.badRequest)
