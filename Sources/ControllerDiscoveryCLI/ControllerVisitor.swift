@@ -35,7 +35,7 @@ extension Syntax {
 
 extension InheritanceClauseSyntax {
   var isControllerDiscoverable: Bool {
-    inheritedTypeCollection.contains { node in
+      inheritedTypes.contains { node in
         let typeNameText = IdentifierTypeSyntax(node.type)?.name.text
       return typeNameText == "ControllerDiscoverable"
     }
