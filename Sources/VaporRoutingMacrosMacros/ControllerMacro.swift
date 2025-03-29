@@ -1,5 +1,6 @@
 import SwiftSyntax
 import SwiftSyntaxMacros
+import SwiftSyntaxBuilder
 
 public struct ControllerMacro: MemberMacro, ExtensionMacro {
 
@@ -9,14 +10,18 @@ public struct ControllerMacro: MemberMacro, ExtensionMacro {
         of node: AttributeSyntax,
         providingMembersOf decl: D,
         in context: C
-    ) throws -> [SwiftSyntax.DeclSyntax]
-    where D: DeclGroupSyntax, C: MacroExpansionContext {
+    ) throws -> [SwiftSyntax.DeclSyntax] where D: DeclGroupSyntax, C: MacroExpansionContext {
         
-        guard
-            let classDeclaration = decl.as(ClassDeclSyntax.self),
-            classDeclaration.modifiers.first(where: { $0.name.text == "final" }) != nil
-        else {
-            throw CustomError.message("@Controller only works with classes including the 'final' modifier")
+        let typeDeclaration: HasTrailingMemberDeclBlock? = if let declaration = decl.as(ClassDeclSyntax.self) {
+            declaration.modifiers.first(where: { $0.name.text == "final" }) != nil
+                ? declaration
+                : nil
+        } else {
+            decl.as(StructDeclSyntax.self)
+        }
+        
+        guard let typeDeclaration else {
+            throw CustomError.message("@Controller only works with structs or classes including the 'final' modifier")
         }
         
         guard let arguments = node.arguments?.as(LabeledExprListSyntax.self),
@@ -32,7 +37,7 @@ public struct ControllerMacro: MemberMacro, ExtensionMacro {
             middlewareArg = middlewareArgValue
         }
         
-        let handlers = try classDeclaration.memberBlock.members
+        let handlers = try typeDeclaration.memberBlock.members
             .compactMap { $0.decl.as(FunctionDeclSyntax.self) }
             .filter { funcDecl in
                 for attr in funcDecl.attributes {

@@ -10,6 +10,40 @@ final class VaporRoutingMacrosTests: XCTestCase {
         "Post": HandlerMacro.self,
     ]
     
+    func testMacrosWithStructDeclaration() {
+        assertMacroExpansion(
+            """
+            @Controller("hello")
+            struct HelloController {
+                @Get
+                func hello(req: Request, @QueryParam("name") provided: String?) -> String {
+                    return "Hi, there!"
+                }
+            }
+            """,
+            expandedSource: #"""
+            struct HelloController {
+                func hello(req: Request, @QueryParam("name") provided: String?) -> String {
+                    return "Hi, there!"
+                }
+
+                public func boot(routes: RoutesBuilder) {
+                    let controllerPath = "hello"
+                    let controller = routes.grouped(controllerPath.pathComponents)
+                    controller.on(.GET, use: { req async throws in
+                            let nameParam: String? = req.query["name"]
+                            return self.hello(req: req, provided: nameParam)
+                        })
+                }
+            }
+
+            extension HelloController: RouteCollection {
+            }
+            """#,
+            macros: testMacros
+        )
+    }
+    
     func testMacrosWithQueryParams() {
         assertMacroExpansion(
             """
